@@ -11,7 +11,7 @@
         "email": "me@seth-holladay.com"
     },
     "scripts": {
-        "test": "xo && ./setup-tests.sh && ava"
+        "test": "xo && bash setup-tests.sh && ava"
     },
     "repository": {
         "type": "git",

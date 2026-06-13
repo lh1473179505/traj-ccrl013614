@@ -77,8 +77,10 @@ const envy = (input) => {
     const camelizedGlobalEnvKeys = Object.keys(camelizedGlobalEnv);
 
     // We treat env vars as case insensitive, like Windows does.
+    // Empty-string process.env values do not satisfy a required variable,
+    // so that .env can fill in when the global value is blank.
     const needsEnvFile = camelizedExampleEnvKeys.some((key) => {
-        return !camelizedGlobalEnvKeys.includes(key);
+        return !camelizedGlobalEnvKeys.includes(key) || camelizedGlobalEnv[key] === '';
     });
 
     if (!needsEnvFile) {
@@ -96,9 +98,12 @@ const envy = (input) => {
 
     const camelizedLocalEnv = camelcaseKeys(loadEnvFile(envPath));
 
+    const nonEmptyGlobalEnv = includeKeys(camelizedGlobalEnv, (key, value) => {
+        return value !== '';
+    });
     const camelizedMergedEnv = {
         ...camelizedLocalEnv,
-        ...camelizedGlobalEnv
+        ...nonEmptyGlobalEnv
     };
     const camelizedMergedEnvKeys = Object.keys(camelizedMergedEnv);
 
