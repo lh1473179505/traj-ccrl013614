@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { execFileSync } from 'node:child_process';
 import isWsl from 'is-wsl';
 import { isDirectorySync } from 'path-type';
 import { includeKeys } from 'filter-obj';
@@ -29,21 +30,34 @@ const assertHidden = (filepath) => {
 
 const assertIgnored = (filepath) => {
     const failMessage = `File must be ignored by git. Fix: echo '${path.basename(filepath)}' >> .gitignore`;
-    let ignores;
-    try {
-        ignores = fs.readFileSync(path.join(filepath, '..', '.gitignore'), 'utf8');
-    }
-    catch (error) {
-        if (error.code === 'ENOENT') {
-            if (!isDirectorySync(path.join(filepath, '..', '.git'))) {
-                return;
+    const absolutePath = path.resolve(filepath);
+    const directory = path.dirname(absolutePath);
+
+    // If not inside a git repo, skip the check.
+    if (!isDirectorySync(path.join(directory, '.git'))) {
+        // Walk up to find a git root; if none found, skip.
+        let dir = directory;
+        let found = false;
+        while (true) {
+            const parent = path.dirname(dir);
+            if (parent === dir) {
+                break;
             }
-            throw new Error(failMessage);
+            dir = parent;
+            if (isDirectorySync(path.join(dir, '.git'))) {
+                found = true;
+                break;
+            }
         }
-        throw error;
+        if (!found) {
+            return;
+        }
     }
 
-    if (!ignores.split(/\r?\n/u).includes(path.basename(filepath))) {
+    try {
+        execFileSync('git', ['check-ignore', '--no-index', '-q', absolutePath]);
+    }
+    catch {
         throw new Error(failMessage);
     }
 };
