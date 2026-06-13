@@ -32,6 +32,13 @@ test('returns camelcased keys', (t) => {
     });
 });
 
+test('strips export prefix from env lines', (t) => {
+    t.deepEqual(fixture('export-prefix'), {
+        myKey : 'my val',
+        dog   : 'woof'
+    });
+});
+
 test('returns excess vars in .env', (t) => {
     t.deepEqual(fixture('excess-env-entry'), {
         myKey : 'my val',
