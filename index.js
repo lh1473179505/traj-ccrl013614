@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -29,9 +30,8 @@ const assertHidden = (filepath) => {
 
 const assertIgnored = (filepath) => {
     const failMessage = `File must be ignored by git. Fix: echo '${path.basename(filepath)}' >> .gitignore`;
-    let ignores;
     try {
-        ignores = fs.readFileSync(path.join(filepath, '..', '.gitignore'), 'utf8');
+        fs.accessSync(path.join(filepath, '..', '.gitignore'));
     }
     catch (error) {
         if (error.code === 'ENOENT') {
@@ -43,7 +43,10 @@ const assertIgnored = (filepath) => {
         throw error;
     }
 
-    if (!ignores.split(/\r?\n/u).includes(path.basename(filepath))) {
+    try {
+        execFileSync('git', ['check-ignore', '--quiet', filepath]);
+    }
+    catch {
         throw new Error(failMessage);
     }
 };
