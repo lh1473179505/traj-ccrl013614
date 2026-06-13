@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import process from 'node:process';
 import test from 'ava';
 import camelcase from 'camelcase';
@@ -149,4 +150,111 @@ test('requires all vars from .env.example', (t) => {
         fixture('missing-env-entry');
     }, { instanceOf : Error });
     t.is(error.message, 'Environment variables are missing: MISSING, EMPTY');
+});
+
+// Focused tests for gitignore pattern matching.
+// On Windows, fs.statSync().mode does not reflect Unix permissions,
+// so we mock fs.statSync and process.platform to reach assertIgnored.
+const withUnixPermissions = () => {
+    const restorePlatform = monkey(process, 'platform');
+    Object.defineProperty(process, 'platform', {
+        configurable : true,
+        value        : 'linux'
+    });
+    const originalStatSync = fs.statSync;
+    fs.statSync = () => {
+        return {
+            mode : 0o600,
+            isFile() {
+                return true;
+            },
+            isDirectory() {
+                return false;
+            }
+        };
+    };
+    return () => {
+        fs.statSync = originalStatSync;
+        restorePlatform();
+    };
+};
+
+const clearEnv = () => {
+    const saved = {};
+    for (const key of ['MY_KEY', 'DOG']) {
+        if (key in process.env) {
+            saved[key] = process.env[key];
+            delete process.env[key];
+        }
+    }
+    return () => {
+        for (const [key, value] of Object.entries(saved)) {
+            process.env[key] = value;
+        }
+    };
+};
+
+test('gitignore: exact match .env', (t) => {
+    const restorePerms = withUnixPermissions();
+    const restoreEnv = clearEnv();
+    try {
+        const result = fixture('gitignore-exact');
+        t.deepEqual(result, {
+            myKey : 'my val',
+            dog   : 'woof'
+        });
+    }
+    finally {
+        restorePerms();
+        restoreEnv();
+    }
+});
+
+test('gitignore: leading slash /.env', (t) => {
+    const restorePerms = withUnixPermissions();
+    const restoreEnv = clearEnv();
+    try {
+        const result = fixture('gitignore-leading-slash');
+        t.deepEqual(result, {
+            myKey : 'my val',
+            dog   : 'woof'
+        });
+    }
+    finally {
+        restorePerms();
+        restoreEnv();
+    }
+});
+
+test('gitignore: glob pattern .env*', (t) => {
+    const restorePerms = withUnixPermissions();
+    const restoreEnv = clearEnv();
+    try {
+        const result = fixture('gitignore-glob');
+        t.deepEqual(result, {
+            myKey : 'my val',
+            dog   : 'woof'
+        });
+    }
+    finally {
+        restorePerms();
+        restoreEnv();
+    }
+});
+
+test('gitignore: non-matching pattern .envrc should fail', (t) => {
+    const restorePerms = withUnixPermissions();
+    const restoreEnv = clearEnv();
+    try {
+        t.throws(() => {
+            fixture('gitignore-no-match');
+        }, {
+            instanceOf : Error,
+            message    : 'File must be ignored by git. Fix: echo \'.env\' >> .gitignore'
+        });
+    }
+    finally {
+        restorePerms();
+        restoreEnv();
+    }
 });

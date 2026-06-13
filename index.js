@@ -27,8 +27,76 @@ const assertHidden = (filepath) => {
     }
 };
 
+const matchesGitignorePattern = (pattern, filename) => {
+    let processed = pattern.trim();
+
+    // Skip empty lines and comments
+    if (!processed || processed.startsWith('#')) {
+        return null;
+    }
+
+    // Negation: if this pattern starts with !, it un-ignores
+    const negated = processed.startsWith('!');
+    if (negated) {
+        processed = processed.slice(1);
+    }
+
+    // Directory-only patterns (trailing /) don't apply to files
+    if (processed.endsWith('/')) {
+        return null;
+    }
+
+    // Strip leading / (root-relative anchor)
+    if (processed.startsWith('/')) {
+        processed = processed.slice(1);
+    }
+
+    // Patterns containing / (other than leading/trailing) are path-based;
+    // skip them for simple basename matching.
+    if (processed.includes('/')) {
+        return null;
+    }
+
+    // Lone ** matches everything
+    if (processed === '**') {
+        return {
+            matches : true,
+            negated
+        };
+    }
+
+    // Convert glob to regex:
+    // 1. Escape regex special chars (except * and ?)
+    let regex = processed.replaceAll(/[.+^${}()|[\]\\]/gu, String.raw`\$&`);
+    // 2. Replace ** with placeholder, then * with .*, then placeholder with .*
+    regex = regex.replaceAll('**', '\u0000');
+    regex = regex.replaceAll('*', '.*');
+    regex = regex.replaceAll('\u0000', '.*');
+    // 3. Replace ? with .
+    regex = regex.replaceAll('?', '.');
+
+    const matches = new RegExp(`^${regex}$`, 'u').test(filename);
+    return {
+        matches,
+        negated
+    };
+};
+
+const isIgnoredByGitignore = (ignoresContent, filename) => {
+    const lines = ignoresContent.split(/\r?\n/u);
+    let result = false;
+    for (const line of lines) {
+        const match = matchesGitignorePattern(line, filename);
+        if (match && match.matches) {
+            result = !match.negated;
+        }
+    }
+    return result;
+};
+
 const assertIgnored = (filepath) => {
-    const failMessage = `File must be ignored by git. Fix: echo '${path.basename(filepath)}' >> .gitignore`;
+    const basename = path.basename(filepath);
+    const failMessage = `File must be ignored by git. Fix: echo '${basename}' >> .gitignore`;
     let ignores;
     try {
         ignores = fs.readFileSync(path.join(filepath, '..', '.gitignore'), 'utf8');
@@ -43,7 +111,7 @@ const assertIgnored = (filepath) => {
         throw error;
     }
 
-    if (!ignores.split(/\r?\n/u).includes(path.basename(filepath))) {
+    if (!isIgnoredByGitignore(ignores, path.basename(filepath))) {
         throw new Error(failMessage);
     }
 };
