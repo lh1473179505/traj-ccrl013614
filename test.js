@@ -144,6 +144,15 @@ test('friendly error if .env is not a file', (t) => {
     t.is(error.message, `Filepath must be a file: ${filepath}`);
 });
 
+test('handles double-quoted values', (t) => {
+    t.deepEqual(fixture('double-quotes'), {
+        doubleQuoted : 'hello',
+        singleQuoted : 'hello',
+        unquoted     : 'hello',
+        mismatched   : '"hello\''
+    });
+});
+
 test('requires all vars from .env.example', (t) => {
     const error = t.throws(() => {
         fixture('missing-env-entry');
