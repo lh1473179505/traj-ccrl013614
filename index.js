@@ -43,7 +43,22 @@ const assertIgnored = (filepath) => {
         throw error;
     }
 
-    if (!ignores.split(/\r?\n/u).includes(path.basename(filepath))) {
+    const basename = path.basename(filepath);
+    const isIgnored = ignores.split(/\r?\n/u).some((line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) {
+            return false;
+        }
+        if (trimmed === basename) {
+            return true;
+        }
+        if (trimmed.startsWith('**/') && trimmed.slice(3) === basename) {
+            return true;
+        }
+        return false;
+    });
+
+    if (!isIgnored) {
         throw new Error(failMessage);
     }
 };
